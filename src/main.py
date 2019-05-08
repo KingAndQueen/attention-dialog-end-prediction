@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import *
 
 # load data
 # if args.data == "all":
-dial_list, input_dial, output_class, pairs = prepareData('./data/dial_list_all_unk.txt', './data/tgt_list_all_onehot.txt')
+dial_list, input_dial, output_class, pairs = prepareData('../data/dial_list.txt', './data/tgt_list.txt')
 #elif args.data == "it":
 #    dial_list, input_dial, output_class, pairs = prepareData('./data/dial_list_unk.txt', './data/tgt_list.txt')
 if args.movie or args.mix_movie:
@@ -24,7 +24,7 @@ if args.glove == 50:
     load_glove("./data/glove.twitter.27B.50d_special.txt", input_dial, args.glove, args.load_glove)
     print("loaded glove-50 data")
 elif args.glove == 100:
-    load_glove("./data/glove.twitter.27B.100d.special.txt", input_dial, args.glove, args.load_glove)
+    load_glove("../data/glove.twitter.27B.100d.txt", input_dial, args.glove, args.load_glove)
     print("loaded glove-100 data")
 if args.movie:
     load_glove("./data/glove.twitter.27B.100d.special.txt", input_dial_movie, args.glove, args.load_glove)
