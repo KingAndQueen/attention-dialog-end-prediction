@@ -1,11 +1,14 @@
+
+from __future__ import unicode_literals
 import re
 import random
 import ast
 import unicodedata
 import pickle
 import matplotlib
-matplotlib.use('Agg')
 
+matplotlib.use('Agg')
+import codecs
 from matplotlib import pyplot as plt
 import matplotlib.ticker as ticker
 import numpy as np
@@ -13,13 +16,15 @@ import time
 import math
 import torch
 import torchwordemb
+import pdb
 from fields import Dial
 from fields import BClass
 from torch.autograd import Variable
 from settings import *
 
+
 def make_false_sample_movie(dial_list, input_dial):
-    #with open(dial_list_dir, encoding='utf-8') as file:
+    # with open(dial_list_dir, encoding='utf-8') as file:
     #    dial_list = file.read()
     # dial_list = ast.literal_eval(dial_list)
     len_dial = len(dial_list)
@@ -28,19 +33,21 @@ def make_false_sample_movie(dial_list, input_dial):
         temp_dial = dial_list[i]
         dial_num_list = list(range(len_dial))
         dial_num_list.remove(i)
-        for j in range(1,min(len(temp_dial),20)):
+        for j in range(1, min(len(temp_dial), 20)):
             temp_input_var = temp_dial[:j]
             rand_dial = random.sample(dial_num_list, 1)[0]
             temp_false_sent = random.sample(dial_list[rand_dial], 1)[0]
-            temp_pair = (temp_false_sent, [0,0,30])
+            temp_pair = (temp_false_sent, [0, 0, 30])
             temp_pair = variablesFromPair_glove(temp_pair, input_dial)
             temp_input_var.append(temp_false_sent)
             temp_input_var = [variableFromSentence_glove(sent, input_dial) for sent in temp_input_var]
-            false_var.append((temp_pair, temp_input_var))            
+            false_var.append((temp_pair, temp_input_var))
     return false_var
+
 
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
+
 
 def load_glove(path, input_dial, glove_dim, load_glove):
     if load_glove:
@@ -70,19 +77,27 @@ def mark_unknown(dial_list, input_dial):
 
 
 def unicodeToAscii(s):
-    return ''.join(
+    return u''.join(
         c for c in unicodedata.normalize('NFD', s)
         if unicodedata.category(c) != 'Mn'
     )
+
 
 # Lowercase, trim, and remove non-letter characters
 
 
 def normalizeString(s):
+    # s = s.decode('utf8')
     s = re.sub(r"([0-9]+)", r" <number> ", s)
     s = re.sub(r"[^a-zA-Z<>]+", r" ", s)
-    s = unicodeToAscii(s.lower())
-    s = " ".join(s.split())
+    # pdb.set_trace()
+    # print(s)
+    s = s.decode('utf8')
+    try:
+        s = unicodeToAscii(s.lower())
+        s = " ".join(s.split())
+    except:
+        pdb.set_trace()
     return s
 
 
@@ -90,27 +105,49 @@ def readDialog(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list.txt')
     print("Reading lines...")
 
     # Read the file and split into lines
-    with open(dial_list_dir, encoding='utf-8') as file:
-        dial_list = file.read()
+    with codecs.open(dial_list_dir,'rb') as file:
+    # with open(dial_list_dir) as file:
+        dial_list = file.read().decode('utf8')
+        # dial_list =dial_list.encode('utf-8').decode('utf-8')
+    # pdb.set_trace()
     dial_list = ast.literal_eval(dial_list)
 
-    with open(tgt_list_dir, encoding='utf-8') as file:
+    with codecs.open(tgt_list_dir, 'r', 'utf-8') as file:
         tgt_list = file.read()
     tgt_list = ast.literal_eval(tgt_list)
 
     pairs = []
-    dial_list = [[normalizeString(' '.join(dial)) for dial in dials] for dials in dial_list]
+    # pdb.set_trace()
+    dial_list_new2 = []
+    for dials in dial_list:
+        dial_list_new=[]
+        for dial in dials:
+            dial=[ss.decode('utf-8') for ss in dial]
+            # a=' '.join(dial)
+            # print(a)
+            try:
+                temp = normalizeString(' '.join(dial))
+            except:
+                pdb.set_trace()
+                # temp = normalizeString(' '.join(dial))
+            dial_list_new.append(temp)
+        dial_list_new2.append(dial_list_new)
+    # dial_list = dial_list_new
+    # pdb.set_trace()
+    dial_list=dial_list_new2
+    # dial_list = [[normalizeString(' '.join(dial)) for dial in dials] for dials in dial_list]
     tgt_list = [[[str(s) for s in score] for score in scores] for scores in tgt_list]
+    # pdb.set_trace()
     for i in range(len(dial_list)):
         temp_dial = dial_list[i]
         if len(temp_dial) == 20:
             temp_dial = [temp_dial[j] for j in range(1, 20, 2)]
             temp_tgt = tgt_list[i]
-            temp_tgt = [x for x in temp_tgt if x!=['0','0','0']]
+            temp_tgt = [x for x in temp_tgt if x != ['0', '0', '0']]
         elif len(temp_dial) == 21:
-            temp_dial = [temp_dial[j] for j in range(2,21,2)]
+            temp_dial = [temp_dial[j] for j in range(2, 21, 2)]
             temp_tgt = tgt_list[i]
-            temp_tgt = [x for x in temp_tgt if x!=['0','0','0']]
+            temp_tgt = [x for x in temp_tgt if x != ['0', '0', '0']]
         else:
             print("Error: Dial list has odd element - length it nor 20 or 21")
         temp_pairs = list(zip(temp_dial, temp_tgt))
@@ -121,15 +158,16 @@ def readDialog(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list.txt')
 
     return dial_list, input_dial, output_class, pairs
 
+
 def readDialog_movie(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list.txt'):
     print("Reading lines...")
 
     # Read the file and split into lines
-    with open(dial_list_dir, encoding='utf-8') as file:
+    with open(dial_list_dir) as file:
         dial_list = file.read()
     dial_list = ast.literal_eval(dial_list)
 
-    with open(tgt_list_dir, encoding='utf-8') as file:
+    with open(tgt_list_dir) as file:
         tgt_list = file.read()
     tgt_list = ast.literal_eval(tgt_list)
 
@@ -140,7 +178,7 @@ def readDialog_movie(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list
         temp_dial = dial_list[i]
         temp_dial = temp_dial[1:]
         temp_tgt = tgt_list[i]
-        temp_tgt = [x for x in temp_tgt if x!=['0','0','0']]
+        temp_tgt = [x for x in temp_tgt if x != ['0', '0', '0']]
         # print("Error: Dial list has odd element - length it nor 20 or 21")
         temp_pairs = list(zip(temp_dial, temp_tgt))
         pairs.append(temp_pairs)
@@ -149,6 +187,7 @@ def readDialog_movie(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list
     output_class = BClass(len(tgt_list[0][0]), 30)
 
     return dial_list, input_dial, output_class, pairs
+
 
 def prepareData(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list.txt', movie=False):
     if not movie:
@@ -167,6 +206,7 @@ def prepareData(dial_list_dir='../dial_list.txt', tgt_list_dir='../tgt_list.txt'
     print("Number of class:")
     print(output_class.n_class)
     return dial_list, input_dial, output_class, pairs
+
 
 def indexesFromSentence(dial, sentence):
     if type(sentence) == list:
@@ -234,6 +274,7 @@ def make_context(encoder_outputs, input_length):
     context_tensor = torch.mean(new_list, 0)
     return context_tensor
 
+
 def variableFromAnnotation(bclass, scores):
     scores = [bclass.word2index[score] for score in scores]
     result = Variable(torch.LongTensor(scores).view(-1, 1))
@@ -292,7 +333,7 @@ def random_pair_var_list(pairs, dial_list, input_dial):
     rand_pair_num = random.choice(range(len(pairs)))
     rand_dial_num = random.choice(range(10))
     training_pair = pairs[rand_pair_num][rand_dial_num]
-    previous_texts = dial_list[rand_pair_num][:2*rand_dial_num+1]
+    previous_texts = dial_list[rand_pair_num][:2 * rand_dial_num + 1]
     text = (previous_texts, training_pair[0])
     training_pair = variablesFromPair(training_pair, input_dial)
     input_variable_list = dial_list[rand_pair_num][:rand_dial_num * 2 + 2]
@@ -314,7 +355,7 @@ def split_data(pairs, test_ratio, dial_list, input_dial):
         if len(dial_list[num]) == 20:
             temp_input_var = [dial_list[num][:i * 2 + 2] for i in range(10)]
         elif len(dial_list[num]) == 21:
-            temp_input_var = [dial_list[num][:i*2+3] for i in range(10)]
+            temp_input_var = [dial_list[num][:i * 2 + 3] for i in range(10)]
         temp_input_var = [[variableFromSentence_glove(sent, input_dial) for sent in var] for var in temp_input_var]
         test_vars.extend(list(zip(temp_pair, temp_input_var)))
     train_vars = []
@@ -325,10 +366,11 @@ def split_data(pairs, test_ratio, dial_list, input_dial):
         if len(dial_list[num]) == 20:
             temp_input_var = [dial_list[num][:i * 2 + 2] for i in range(10)]
         elif len(dial_list[num]) == 21:
-            temp_input_var = [dial_list[num][:i*2+3] for i in range(10)]
+            temp_input_var = [dial_list[num][:i * 2 + 3] for i in range(10)]
         temp_input_var = [[variableFromSentence_glove(sent, input_dial) for sent in var] for var in temp_input_var]
         train_vars.extend(list(zip(temp_pair, temp_input_var)))
     return train_vars, test_vars
+
 
 def split_data_features(pairs, test_ratio, dial_list, input_dial, features=None):
     num_list = list(range(len(pairs)))
@@ -340,7 +382,7 @@ def split_data_features(pairs, test_ratio, dial_list, input_dial, features=None)
     test_features = None
     if not features is None:
         use_feature = True
-        features = [features[i*10:i*10+10] for i in range(415)]
+        features = [features[i * 10:i * 10 + 10] for i in range(415)]
         train_features = []
         test_features = []
     test_vars = []
@@ -351,7 +393,7 @@ def split_data_features(pairs, test_ratio, dial_list, input_dial, features=None)
         if len(dial_list[num]) == 20:
             temp_input_var = [dial_list[num][:i * 2 + 2] for i in range(10)]
         elif len(dial_list[num]) == 21:
-            temp_input_var = [dial_list[num][:i*2+3] for i in range(10)]
+            temp_input_var = [dial_list[num][:i * 2 + 3] for i in range(10)]
         temp_input_var = [[variableFromSentence_glove(sent, input_dial) for sent in var] for var in temp_input_var]
         test_vars.extend(list(zip(temp_pair, temp_input_var)))
         if use_feature:
@@ -364,13 +406,14 @@ def split_data_features(pairs, test_ratio, dial_list, input_dial, features=None)
         if len(dial_list[num]) == 20:
             temp_input_var = [dial_list[num][:i * 2 + 2] for i in range(10)]
         elif len(dial_list[num]) == 21:
-            temp_input_var = [dial_list[num][:i*2+3] for i in range(10)]
+            temp_input_var = [dial_list[num][:i * 2 + 3] for i in range(10)]
         temp_input_var = [[variableFromSentence_glove(sent, input_dial) for sent in var] for var in temp_input_var]
         train_vars.extend(list(zip(temp_pair, temp_input_var)))
         if use_feature:
             train_features.extend(features[num])
 
     return train_vars, test_vars, train_features, test_features
+
 
 def split_data_movie(pairs, test_ratio, dial_list, input_dial):
     num_list = list(range(len(pairs)))
@@ -382,10 +425,11 @@ def split_data_movie(pairs, test_ratio, dial_list, input_dial):
         temp_pairs = pairs[num]
         temp_pair = [temp_pairs[i] for i in range(len(temp_pairs))]
         temp_pair = [variablesFromPair_glove(pair, input_dial) for pair in temp_pair]
-        temp_input_var = [dial_list[num][:i+2] for i in range(len(temp_pairs))]
+        temp_input_var = [dial_list[num][:i + 2] for i in range(len(temp_pairs))]
         temp_input_var = [[variableFromSentence_glove(sent, input_dial) for sent in var] for var in temp_input_var]
         train_vars.extend(list(zip(temp_pair, temp_input_var)))
     return train_vars
+
 
 def asMinutes(s):
     m = math.floor(s / 60)
@@ -412,6 +456,7 @@ def savePlot(points, epoch):
     fig.savefig("./loss_figures/loss_figure_" + timestr + "_" + str(epoch))
     plt.close(fig)
 
+
 def readDialog_submit(dial_list, tgt_list):
     pairs = []
     dial_list = [[normalizeString(' '.join(dial)) for dial in dials] for dials in dial_list]
@@ -421,11 +466,11 @@ def readDialog_submit(dial_list, tgt_list):
         if len(temp_dial) == 20:
             temp_dial = [temp_dial[j] for j in range(1, 20, 2)]
             temp_tgt = tgt_list[i]
-            temp_tgt = [x for x in temp_tgt if x!=['0','0','0']]
+            temp_tgt = [x for x in temp_tgt if x != ['0', '0', '0']]
         elif len(temp_dial) == 21:
-            temp_dial = [temp_dial[j] for j in range(2,21,2)]
+            temp_dial = [temp_dial[j] for j in range(2, 21, 2)]
             temp_tgt = tgt_list[i]
-            temp_tgt = [x for x in temp_tgt if x!=['0','0','0']]
+            temp_tgt = [x for x in temp_tgt if x != ['0', '0', '0']]
         else:
             print("Error: Dial list has odd element - length it nor 20 or 21")
         temp_pairs = list(zip(temp_dial, temp_tgt))
@@ -436,6 +481,7 @@ def readDialog_submit(dial_list, tgt_list):
 
     return dial_list, input_dial, output_class, pairs
 
+
 def load_separate_data_vars(dial_list, pairs, features=None):
     i_dial, i_pairs = dial_list[:100], pairs[:100]
     t_dial, t_pairs = dial_list[100:200], pairs[100:200]
@@ -443,19 +489,30 @@ def load_separate_data_vars(dial_list, pairs, features=None):
     y_dial, y_pairs = dial_list[315:], pairs[315:]
     train_features, test_features, i_features, t_features, c_features, y_features = None, None, None, None, None, None
     if not features is None:
-        i_features, t_features, c_features, y_features = features[:1000], features[1000:2000], features[2000:3150], features[3150:]
-    
+        i_features, t_features, c_features, y_features = features[:1000], features[1000:2000], features[
+                                                                                               2000:3150], features[
+                                                                                                           3150:]
+
     # split data to train, test data if option selcted as random
-    i_train_vars, i_test_vars, i_train_features, i_test_features= split_data_features(i_pairs, 0.1, i_dial, input_dial, i_features)
-    t_train_vars, t_test_vars, t_train_features, t_test_features= split_data_features(t_pairs, 0.1, t_dial, input_dial, t_features)
-    c_train_vars, c_test_vars, c_train_features, c_test_features= split_data_features(c_pairs, 0.1, c_dial, input_dial, c_features)
-    y_train_vars, y_test_vars, y_train_features, y_test_features= split_data_features(y_pairs, 0.1, y_dial, input_dial, y_features)
+    i_train_vars, i_test_vars, i_train_features, i_test_features = split_data_features(i_pairs, 0.1, i_dial, input_dial,
+                                                                                       i_features)
+    t_train_vars, t_test_vars, t_train_features, t_test_features = split_data_features(t_pairs, 0.1, t_dial, input_dial,
+                                                                                       t_features)
+    c_train_vars, c_test_vars, c_train_features, c_test_features = split_data_features(c_pairs, 0.1, c_dial, input_dial,
+                                                                                       c_features)
+    y_train_vars, y_test_vars, y_train_features, y_test_features = split_data_features(y_pairs, 0.1, y_dial, input_dial,
+                                                                                       y_features)
     if not features is None:
-        train_features = i_train_features+t_train_features+c_train_features+y_train_features
-        test_features = i_test_features+t_test_features+c_test_features+y_test_features
-    train_vars = i_train_vars+t_train_vars+c_train_vars+y_train_vars
-    test_vars = i_test_vars+t_test_vars+c_test_vars+y_test_var
-    return (train_vars,train_features), (test_vars, test_features), (i_train_vars, i_test_vars, i_train_features, i_test_features), (t_train_vars, t_test_vars, t_train_features, t_test_features), (c_train_vars, c_test_vars, c_train_features, c_test_features), (y_train_vars, y_test_vars, y_train_features, y_test_features)
+        train_features = i_train_features + t_train_features + c_train_features + y_train_features
+        test_features = i_test_features + t_test_features + c_test_features + y_test_features
+    train_vars = i_train_vars + t_train_vars + c_train_vars + y_train_vars
+    test_vars = i_test_vars + t_test_vars + c_test_vars + y_test_var
+    return (train_vars, train_features), (test_vars, test_features), (
+    i_train_vars, i_test_vars, i_train_features, i_test_features), (
+           t_train_vars, t_test_vars, t_train_features, t_test_features), (
+           c_train_vars, c_test_vars, c_train_features, c_test_features), (
+           y_train_vars, y_test_vars, y_train_features, y_test_features)
+
 
 def import_separate_data_vars(args):
     i_train_features, i_test_features = None, None
@@ -472,8 +529,8 @@ def import_separate_data_vars(args):
     c_test_vars = pickle.load(open('./data/c_test_vars_1', 'rb'))
     y_train_vars = pickle.load(open('./data/y_train_vars_1', 'rb'))
     y_test_vars = pickle.load(open('./data/y_test_vars_1', 'rb'))
-    train_vars = i_train_vars+t_train_vars+c_train_vars+y_train_vars
-    test_vars = i_test_vars+t_test_vars+c_test_vars+y_test_vars
+    train_vars = i_train_vars + t_train_vars + c_train_vars + y_train_vars
+    test_vars = i_test_vars + t_test_vars + c_test_vars + y_test_vars
 
     if not args.no_feature:
         i_train_features = pickle.load(open('./data/i_train_features_1', 'rb'))
@@ -484,7 +541,10 @@ def import_separate_data_vars(args):
         c_test_features = pickle.load(open('./data/c_test_features_1', 'rb'))
         y_train_features = pickle.load(open('./data/y_train_features_1', 'rb'))
         y_test_features = pickle.load(open('./data/y_test_features_1', 'rb'))
-        train_features = i_train_features+t_train_features+c_train_features+y_train_features
-        test_features = i_test_features+t_test_features+c_test_features+y_test_features
-    return (train_vars,train_features), (test_vars, test_features), (i_train_vars, i_test_vars, i_train_features, i_test_features), (t_train_vars, t_test_vars, t_train_features, t_test_features), (c_train_vars, c_test_vars, c_train_features, c_test_features), (y_train_vars, y_test_vars, y_train_features, y_test_features)
-   
+        train_features = i_train_features + t_train_features + c_train_features + y_train_features
+        test_features = i_test_features + t_test_features + c_test_features + y_test_features
+    return (train_vars, train_features), (test_vars, test_features), (
+    i_train_vars, i_test_vars, i_train_features, i_test_features), (
+           t_train_vars, t_test_vars, t_train_features, t_test_features), (
+           c_train_vars, c_test_vars, c_train_features, c_test_features), (
+           y_train_vars, y_test_vars, y_train_features, y_test_features)
